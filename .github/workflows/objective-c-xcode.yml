@@ -1,0 +1,62 @@
+name: Build and Export IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build + Archive
+        run: |
+          xcodebuild \
+            -project maciOS.xcodeproj \
+            -scheme maciOS \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath $PWD/build/app.xcarchive \
+            clean archive
+
+      - name: Create ExportOptions.plist
+        run: |
+          cat > ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>ad-hoc</string>
+
+              <key>signingStyle</key>
+              <string>automatic</string>
+
+              <key>stripSwiftSymbols</key>
+              <true/>
+
+              <key>compileBitcode</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath $PWD/build/app.xcarchive \
+            -exportPath $PWD/build/ipa \
+            -exportOptionsPlist ExportOptions.plist
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: maciOS-IPA
+          path: build/ipa/*.ipa
